@@ -1,0 +1,29 @@
+[
+  {
+    "category_name": "Прогулки",
+    "category_description": "Активности на свежем воздухе и пешие маршруты",
+    "title": "Прогулка по набережной Севкабель Порта",
+    "description": "Пеший маршрут вдоль Финского залива с видом на ЗСД и портовые краны.",
+    "duration_min": 90,
+    "budget_level": 0,
+    "is_outdoor": true
+  },
+  {
+    "category_name": "Культура",
+    "category_description": "Выставки, музеи и галереи",
+    "title": "Посещение музея Эрарта",
+    "description": "Просмотр современных арт-инсталляций и временных выставок.",
+    "duration_min": 120,
+    "budget_level": 2,
+    "is_outdoor": false
+  },
+  {
+    "category_name": "Настолки",
+    "category_description": "Антикафе и клубы настольных игр",
+    "title": "Партия в настолки в антикафе",
+    "description": "Собраться компанией и поиграть в карточные стратегии или детективные игры.",
+    "duration_min": 180,
+    "budget_level": 1,
+    "is_outdoor": false
+  }
+]
