@@ -6,9 +6,6 @@
 
 ## 1. Модель данных: Активность (Activity)
 
-**Подзадача 1:** Определены поля активности.
-**Подзадача 3:** Определены названия полей и типы данных в JSON.
-
 | Поле в JSON | Тип данных | Описание |
 | :--- | :--- | :--- |
 | `id` | `string` (UUID) | Уникальный идентификатор активности. |
@@ -16,16 +13,16 @@
 горы"). |
 | `description` | `string` | Подробное описание. |
 | `category` | `string` (Enum) | Категория (например, "sport", "culture", 
-"food", "entertainment"). |
-| `duration_minutes` | `integer` | Длительность в минутах. |
+"food"). |
+| `duration` | `integer` | Длительность в минутах. |
 | `price` | `number` (float) | Стоимость (0, если бесплатно). |
 | `location` | `object` | Объект с координатами: `{"lat": 55.75, "lon": 
 37.61}`. |
-| `max_participants` | `integer` | Максимальное число участников. |
+| `maxParticipants` | `integer` | Максимальное число участников. |
 | `mood` | `string` (Enum) | Настроение (например, "active", "relax", 
 "social"). |
-| `tags` | `array[string]` | Массив тегов (например, `["nature", "hiking", 
-"weekend"]`). |
+| `tags` | `array[string]` | Массив тегов (например, `["nature", 
+"hiking"]`). |
 
 ### Пример JSON-представления активности:
 ```json
@@ -34,14 +31,13 @@
   "title": "Утренняя пробежка в парке",
   "description": "Легкий бег для поддержания формы.",
   "category": "sport",
-  "duration_minutes": 60,
+  "duration": 60,
   "price": 0.0,
   "location": {
     "lat": 55.7558,
     "lon": 37.6173
   },
-  "max_participants": 10,
+  "maxParticipants": 10,
   "mood": "active",
   "tags": ["fitness", "outdoor"]
 }
-
