@@ -19,7 +19,7 @@ import { ActionButton } from '../../../shared/ui/ActionButton';
 import { ActivityImage } from '../../../shared/ui/ActivityImage';
 import { RecommendationIcon, type RecommendationIconName } from './RecommendationIcon';
 import { api, getErrorMessage } from '../../../shared/api/client';
-import type { Activity, SearchParams } from '../../../shared/api/types';
+import type { Activity } from '../../../shared/api/types';
 
 type SwipeDirection = 'left' | 'right';
 
@@ -45,16 +45,6 @@ function formatActivity(activity: Activity) {
   };
 }
 
-function filterActivities(activities: Activity[], params: SearchParams | null) {
-  if (!params) return activities;
-  return activities.filter(activity =>
-    (!params.category_ids?.length || params.category_ids.includes(activity.category_id)) &&
-    (params.duration_min == null || activity.duration_min == null || activity.duration_min <= params.duration_min) &&
-    (params.budget_level == null || activity.budget_level <= params.budget_level) &&
-    (params.is_outdoor == null || activity.is_outdoor === params.is_outdoor)
-  );
-}
-
 export default function RecommendationScreen() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const { width } = useWindowDimensions();
@@ -70,9 +60,11 @@ export default function RecommendationScreen() {
   const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
   const [favoritePendingIds, setFavoritePendingIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState('');
   const currentIndexRef = useRef(0);
   const isAnimating = useRef(false);
+  const requestInFlight = useRef(false);
   const shownIds = useRef(new Set<number>());
   const favoriteRequests = useRef(new Set<number>());
   const hasFocusedOnce = useRef(false);
@@ -86,28 +78,51 @@ export default function RecommendationScreen() {
     void api.addHistory(activityId, action).catch(requestError => setError(getErrorMessage(requestError)));
   }
 
+  const requestNextActivity = useCallback(async () => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
+    setRequesting(true);
+    setError('');
+    try {
+      const result = await api.getRecommendation(Array.from(shownIds.current), mode === 'search');
+      if (result.kind === 'success') {
+        const activity = result.recommendation.activity;
+        setActivities(current => [...current, activity]);
+        trackHistory(activity.id, 'shown');
+      } else if (result.kind === 'invalid') {
+        setError(result.errors.join('\n') || 'Не удалось подобрать занятие.');
+      }
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      requestInFlight.current = false;
+      setRequesting(false);
+    }
+  }, [mode]);
+
   const loadActivities = useCallback(async () => {
     setLoading(true);
     setError('');
+    setActivities([]);
+    setFavoriteIds([]);
     setCurrentIndex(0);
     currentIndexRef.current = 0;
+    isAnimating.current = false;
+    requestInFlight.current = false;
+    position.setValue({ x: 0, y: 0 });
+    shownIds.current.clear();
     try {
-      const [allActivities, favorites, savedParams] = await Promise.all([
-        api.getActivities(),
+      const [favorites] = await Promise.all([
         api.getFavorites(),
-        mode === 'search' ? api.getSearchParams() : Promise.resolve(null),
+        requestNextActivity(),
       ]);
-      const matches = mode === 'search' ? filterActivities(allActivities, savedParams) : allActivities;
-      shownIds.current.clear();
-      setActivities(matches);
       setFavoriteIds(favorites.map(favorite => favorite.activity_id));
-      if (matches[0]) trackHistory(matches[0].id, 'shown');
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
       setLoading(false);
     }
-  }, [mode]);
+  }, [position, requestNextActivity]);
 
   useEffect(() => { void loadActivities(); }, [loadActivities]);
 
@@ -187,11 +202,11 @@ export default function RecommendationScreen() {
       if (currentActivity) trackHistory(currentActivity.id, direction === 'right' ? 'accepted' : 'skipped');
       currentIndexRef.current = nextIndex;
       setCurrentIndex(nextIndex);
-      if (activities[nextIndex]) trackHistory(activities[nextIndex].id, 'shown');
+      if (nextIndex >= activities.length) void requestNextActivity();
       position.setValue({ x: 0, y: 0 });
       isAnimating.current = false;
     });
-  }, [position, width, activities]);
+  }, [position, width, activities, requestNextActivity]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, gesture) =>
@@ -255,15 +270,19 @@ export default function RecommendationScreen() {
         <Text accessibilityRole="header" style={[styles.pageTitle, { fontSize: titleSize, lineHeight: titleSize * 1.2 }]}>
           Вот твоя идея!
         </Text>
-        {!!error && activities.length > 0 && <Text accessibilityRole="alert" style={styles.requestError}>{error}</Text>}
+        {!!error && !finished && <Text accessibilityRole="alert" style={styles.requestError}>{error}</Text>}
 
         {loading ? (
           <ActivityIndicator style={{ marginTop: 40 }} color="#48075B" />
-        ) : error && activities.length === 0 ? (
+        ) : finished && requesting ? (
+          <View style={[styles.finishedState, { minHeight: cardHeight }]}>
+            <ActivityIndicator color="#48075B" />
+          </View>
+        ) : finished && error ? (
           <View style={[styles.finishedState, { minHeight: cardHeight }]}>
             <Text style={styles.finishedTitle}>Не удалось загрузить занятия</Text>
             <Text style={styles.finishedText}>{error}</Text>
-            <ActionButton title="Повторить" variant="indigo" onPress={() => void loadActivities()} style={styles.restartButton} labelStyle={styles.acceptLabel} />
+            <ActionButton title="Повторить" variant="indigo" onPress={() => void requestNextActivity()} style={styles.restartButton} labelStyle={styles.acceptLabel} />
           </View>
         ) : finished ? (
           <View style={[styles.finishedState, { minHeight: cardHeight }]}>

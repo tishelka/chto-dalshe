@@ -13,6 +13,8 @@ from app.schemas.user import (
     UserInterestsResponse,
     UserInterestsUpdate,
 )
+from app.schemas.recommendation import RecommendationRequest, RecommendationResponse
+from app.services.recommendation_engine import recommend
 
 router=APIRouter(prefix="/users/me",tags=["users"])
 
@@ -75,6 +77,44 @@ def save_last_search_params(
     db.commit()
     db.refresh(current_user)
     return SearchParamsSchema(**current_user.last_search_params)
+
+@router.post("/recommendations",response_model=RecommendationResponse)
+def get_recommendation(
+    payload:RecommendationRequest,
+    current_user:User=Depends(get_current_user),
+    db:Session=Depends(get_db),
+):
+    search_params=current_user.last_search_params if payload.use_saved_params else None
+    search_params=search_params or {}
+    filters={
+        "participants":None,
+        "available_minutes":search_params.get("duration_min"),
+        "budget_per_person":search_params.get("budget_level"),
+        "location":"any" if search_params.get("is_outdoor") is None else "outdoors" if search_params["is_outdoor"] else "home",
+        "mood":"any",
+    }
+    interest_ids={str(category.id) for category in current_user.interests}
+    interest_ids.update(str(category_id) for category_id in search_params.get("category_ids") or [])
+    activities=db.query(Activity).options(joinedload(Activity.category)).all()
+    result=recommend(
+        activities=activities,
+        filters=filters,
+        interests=sorted(interest_ids),
+        shown_ids=payload.shown_ids,
+    )
+    if result["kind"]=="success":
+        recommendation=result["recommendation"]
+        return {
+            "kind":"success",
+            "recommendation":{
+                "activity":recommendation["activity"].activity,
+                "score":recommendation["score"],
+                "reasons":recommendation["reasons"],
+            },
+            "eligible_count":result["eligible_count"],
+            "remaining_count":result["remaining_count"],
+        }
+    return result
 
 @router.get("/favorites",response_model=List[FavoriteResponse])
 def get_favorites(
