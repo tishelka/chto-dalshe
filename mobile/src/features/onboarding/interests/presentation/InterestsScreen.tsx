@@ -58,7 +58,7 @@ export default function InterestsScreen() {
                 style={({ pressed }) => [styles.card, { width: cardSize, minHeight: cardSize }, index < 3 && styles.topCard, checked && styles.selectedCard, pressed && styles.pressed]}
               >
                 {checked && <Text style={styles.check} accessible={false}>✓</Text>}
-                <Text style={[styles.cardText, { fontSize: Math.min(12, cardSize / 8.5) }]}>{label}</Text>
+                <Text style={[styles.cardText, { fontSize: Math.max(8, Math.min(12, cardSize / 8.5)) }]}>{label}</Text>
               </Pressable>
             );
           })}
