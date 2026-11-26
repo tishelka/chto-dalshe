@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel,ConfigDict
+from pydantic import AnyHttpUrl,BaseModel,ConfigDict
 
 class CategoryResponse(BaseModel):
     model_config=ConfigDict(from_attributes=True)
@@ -11,6 +11,7 @@ class CategoryResponse(BaseModel):
 class ActivityBase(BaseModel):
     title:str
     description:str
+    image_url:Optional[AnyHttpUrl]=None
     category_id:int
     duration_min:Optional[int]=None
     budget_level:int=0

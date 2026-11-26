@@ -30,6 +30,7 @@ erDiagram
         int id PK
         string title
         text description
+        string image_url
         int category_id FK
         int duration_min
         int budget_level

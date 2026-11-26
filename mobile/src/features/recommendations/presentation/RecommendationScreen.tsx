@@ -1,12 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
   Alert,
   Animated,
-  Image,
   PanResponder,
   Pressable,
   ScrollView,
@@ -18,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ActionButton } from '../../../shared/ui/ActionButton';
+import { ActivityImage } from '../../../shared/ui/ActivityImage';
 import { RecommendationIcon, type RecommendationIconName } from './RecommendationIcon';
 import { api, getErrorMessage } from '../../../shared/api/client';
 import type { Activity, SearchParams } from '../../../shared/api/types';
@@ -69,11 +68,14 @@ export default function RecommendationScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+  const [favoritePendingIds, setFavoritePendingIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const currentIndexRef = useRef(0);
   const isAnimating = useRef(false);
   const shownIds = useRef(new Set<number>());
+  const favoriteRequests = useRef(new Set<number>());
+  const hasFocusedOnce = useRef(false);
   const position = useRef(new Animated.ValueXY()).current;
 
   function trackHistory(activityId: number, action: 'shown' | 'accepted' | 'skipped') {
@@ -109,15 +111,46 @@ export default function RecommendationScreen() {
 
   useEffect(() => { void loadActivities(); }, [loadActivities]);
 
+  useFocusEffect(useCallback(() => {
+    if (!hasFocusedOnce.current) {
+      hasFocusedOnce.current = true;
+      return;
+    }
+
+    let isActive = true;
+    void api.getFavorites()
+      .then(favorites => {
+        if (isActive) setFavoriteIds(favorites.map(favorite => favorite.activity_id));
+      })
+      .catch(requestError => {
+        if (isActive) setError(getErrorMessage(requestError));
+      });
+
+    return () => { isActive = false; };
+  }, []));
+
   async function toggleFavorite(activity: Activity) {
-    const isFavorite = favoriteIds.includes(activity.id);
+    const activityId = activity.id;
+    if (favoriteRequests.current.has(activityId)) return;
+
+    const isFavorite = favoriteIds.includes(activityId);
+    favoriteRequests.current.add(activityId);
+    setFavoritePendingIds(current => [...current, activityId]);
+    setFavoriteIds(current => isFavorite
+      ? current.filter(id => id !== activityId)
+      : current.includes(activityId) ? current : [...current, activityId]);
     setError('');
     try {
-      if (isFavorite) await api.removeFavorite(activity.id);
-      else await api.addFavorite(activity.id);
-      setFavoriteIds(current => isFavorite ? current.filter(id => id !== activity.id) : [...current, activity.id]);
+      if (isFavorite) await api.removeFavorite(activityId);
+      else await api.addFavorite(activityId);
     } catch (requestError) {
+      setFavoriteIds(current => isFavorite
+        ? current.includes(activityId) ? current : [...current, activityId]
+        : current.filter(id => id !== activityId));
       setError(getErrorMessage(requestError));
+    } finally {
+      favoriteRequests.current.delete(activityId);
+      setFavoritePendingIds(current => current.filter(id => id !== activityId));
     }
   }
 
@@ -266,7 +299,7 @@ export default function RecommendationScreen() {
                       isFront ? activeCardStyle : undefined,
                     ]}
                   >
-                    <ActivityCard activity={activity} cardHeight={cardHeight} imageHeight={imageHeight} scale={cardScale} isFavorite={favoriteIds.includes(activity.id)} onToggleFavorite={() => void toggleFavorite(activity)} onDetails={() => void showDetails(activity)} />
+                    <ActivityCard activity={activity} cardHeight={cardHeight} imageHeight={imageHeight} scale={cardScale} isFavorite={favoriteIds.includes(activity.id)} isFavoriteUpdating={favoritePendingIds.includes(activity.id)} onToggleFavorite={() => void toggleFavorite(activity)} onDetails={() => void showDetails(activity)} />
                   </Animated.View>
                 );
               })}
@@ -313,21 +346,30 @@ type ActivityCardProps = {
   imageHeight: number;
   scale: number;
   isFavorite: boolean;
+  isFavoriteUpdating: boolean;
   onToggleFavorite: () => void;
   onDetails: () => void;
 };
 
-function ActivityCard({ activity, cardHeight, imageHeight, scale, isFavorite, onToggleFavorite, onDetails }: ActivityCardProps) {
+function ActivityCard({ activity, cardHeight, imageHeight, scale, isFavorite, isFavoriteUpdating, onToggleFavorite, onDetails }: ActivityCardProps) {
   const facts = formatActivity(activity);
   return (
     <View style={[styles.card, { height: cardHeight }]}>
       <View style={[styles.imageFrame, { height: imageHeight }]}>
-        <Image
-          source={require('../../../../assets/images/recommendation-dummy.png')}
+        <ActivityImage
+          imageUrl={activity.image_url}
           resizeMode="cover"
           style={styles.image}
         />
-        <Pressable accessibilityRole="button" accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'} onPress={onToggleFavorite} style={styles.favorite}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+          accessibilityState={{ selected: isFavorite, disabled: isFavoriteUpdating }}
+          disabled={isFavoriteUpdating}
+          hitSlop={8}
+          onPress={onToggleFavorite}
+          style={[styles.favorite, isFavoriteUpdating && styles.favoriteUpdating]}
+        >
           <Text style={styles.favoriteIcon}>{isFavorite ? '♥' : '♡'}</Text>
         </Pressable>
       </View>
@@ -417,10 +459,17 @@ const styles = StyleSheet.create({
   },
   favorite: {
     position: 'absolute',
-    top: 15,
-    left: 15,
+    top: 12,
+    left: 12,
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
   },
-  favoriteIcon: { color: '#A063B1', fontSize: 40, lineHeight: 46, fontWeight: '700' },
+  favoriteUpdating: { opacity: 0.65 },
+  favoriteIcon: { color: '#A063B1', fontSize: 36, lineHeight: 42, fontWeight: '700' },
   cardBody: {
     flex: 1,
   },

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,20 +27,27 @@ export default function FavoritesScreen() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const hasLoaded = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async (showLoading = !hasLoaded.current) => {
+    if (showLoading) {
+      setLoading(true);
+      setError('');
+    }
     try {
       setFavorites(await api.getFavorites());
+      setError('');
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
+      hasLoaded.current = true;
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [load]));
 
   async function removeFavorite(activityId: number) {
     const previous = favorites;
@@ -73,7 +80,7 @@ export default function FavoritesScreen() {
         {loading ? <ActivityIndicator style={styles.loading} color="#48075B" /> : error && favorites.length === 0 ? (
           <View style={styles.errorState}>
             <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
-            <Text style={styles.retry} onPress={() => void load()}>повторить</Text>
+            <Text style={styles.retry} onPress={() => void load(true)}>повторить</Text>
           </View>
         ) : favorites.length ? (
           <View style={styles.favoritesContent}>
@@ -87,7 +94,7 @@ export default function FavoritesScreen() {
                   note={favorite.activity.description}
                   duration={displayDuration(favorite.activity.duration_min)}
                   price={displayBudget(favorite.activity.budget_level)}
-                  image={require('../../../assets/images/recommendation-dummy.png')}
+                  imageUrl={favorite.activity.image_url}
                   onRemove={() => void removeFavorite(favorite.activity_id)}
                 />
               ))}

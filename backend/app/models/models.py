@@ -35,6 +35,7 @@ class Activity(Base):
     id=Column(Integer,primary_key=True,autoincrement=True)
     title=Column(String(255),nullable=False,index=True)
     description=Column(Text,nullable=False)
+    image_url=Column(String(2048),nullable=True)
     category_id=Column(Integer,ForeignKey("categories.id",ondelete="RESTRICT"),nullable=False)
     duration_min=Column(Integer,nullable=True)
     budget_level=Column(Integer,default=0,nullable=False)
