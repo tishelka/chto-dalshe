@@ -1,18 +1,19 @@
-import { Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityImage } from './ActivityImage';
 
 type Props = {
   title: string;
   note: string;
   duration: string;
   price: string;
-  image: ImageSourcePropType;
+  imageUrl?: string | null;
   onRemove?: () => void;
 };
 
-export function SavedActivityCard({ title, note, duration, price, image, onRemove }: Props) {
+export function SavedActivityCard({ title, note, duration, price, imageUrl, onRemove }: Props) {
   return (
     <View style={styles.card}>
-      <Image source={image} resizeMode="cover" style={styles.image} />
+      <ActivityImage imageUrl={imageUrl} resizeMode="cover" style={styles.image} />
       <View style={styles.content}>
         <Text numberOfLines={1} style={styles.title}>{title}</Text>
         <Text numberOfLines={1} style={styles.note}>{note}</Text>

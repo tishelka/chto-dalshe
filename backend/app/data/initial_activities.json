@@ -9,8 +9,8 @@
     "is_outdoor": true
   },
   {
-    "category_name": "Культура",
-    "category_description": "Выставки, музеи и галереи",
+    "category_name": "Музеи и выставки",
+    "category_description": "Музеи, галереи и художественные выставки",
     "title": "Посещение музея Эрарта",
     "description": "Просмотр современных арт-инсталляций и временных выставок.",
     "duration_min": 120,
@@ -18,8 +18,8 @@
     "is_outdoor": false
   },
   {
-    "category_name": "Настолки",
-    "category_description": "Антикафе и клубы настольных игр",
+    "category_name": "Настольные игры",
+    "category_description": "Настольные, карточные и ролевые игры",
     "title": "Партия в настолки в антикафе",
     "description": "Собраться компанией и поиграть в карточные стратегии или детективные игры.",
     "duration_min": 180,

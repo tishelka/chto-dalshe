@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OnboardingButton } from '../../../../shared/ui/OnboardingButton';
 import { InterestGrid } from '../../../../shared/ui/InterestGrid';
 import { onboarding as palette } from '../../../../shared/theme/onboarding';
-import { api, categoriesFromActivities, getErrorMessage } from '../../../../shared/api/client';
+import { api, getErrorMessage } from '../../../../shared/api/client';
 import type { Category } from '../../../../shared/api/types';
 
 export default function InterestsScreen() {
@@ -21,8 +21,8 @@ export default function InterestsScreen() {
     setLoading(true);
     setError('');
     try {
-      const [activities, interests] = await Promise.all([api.getActivities(), api.getInterests()]);
-      setCategories(categoriesFromActivities(activities));
+      const [availableCategories, interests] = await Promise.all([api.getCategories(), api.getInterests()]);
+      setCategories(availableCategories);
       setSelected(interests.interests.map(category => String(category.id)));
     } catch (requestError) {
       setError(getErrorMessage(requestError));

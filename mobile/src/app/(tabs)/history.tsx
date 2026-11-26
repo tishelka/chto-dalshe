@@ -83,7 +83,7 @@ export default function HistoryScreen() {
                     note={entry.activity.description}
                     duration={displayDuration(entry.activity.duration_min)}
                     price={['бесплатно', 'до 500 ₽', 'до 1500 ₽', 'до 3000 ₽'][entry.activity.budget_level] ?? 'платно'}
-                    image={require('../../../assets/images/recommendation-dummy.png')}
+                    imageUrl={entry.activity.image_url}
                   />
                 </View>
               ))}
