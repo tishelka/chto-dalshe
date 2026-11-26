@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List,Optional
+from typing import List,Optional,Literal
 from pydantic import BaseModel,ConfigDict,Field
 from app.schemas.activity import ActivityResponse,CategoryResponse
 
@@ -22,5 +22,17 @@ class FavoriteResponse(BaseModel):
     model_config=ConfigDict(from_attributes=True)
     id:int
     activity_id:int
+    created_at:datetime
+    activity:ActivityResponse
+
+class HistoryCreate(BaseModel):
+    activity_id:int
+    action:Literal["shown","accepted","skipped"]="shown"
+
+class HistoryResponse(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
+    id:int
+    activity_id:int
+    action:str
     created_at:datetime
     activity:ActivityResponse

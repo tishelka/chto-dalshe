@@ -1,6 +1,6 @@
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-export type RecommendationIconName = 'heart' | 'clock' | 'participants' | 'budget' | 'place' | 'check' | 'back' | 'shuffle' | 'arrow-right';
+export type RecommendationIconName = 'heart' | 'clock' | 'participants' | 'category' | 'budget' | 'place' | 'check' | 'back' | 'shuffle' | 'arrow-right';
 
 type Props = {
   name: RecommendationIconName;
@@ -38,6 +38,17 @@ export function RecommendationIcon({ name, size = 26, color = '#FFFFFF' }: Props
         <Circle cx={23} cy={13} r={4} fill={color} opacity={0.82} />
         <Path d="M2 29c0-6.2 4.5-10 10-10s10 3.8 10 10H2Z" fill={color} />
         <Path d="M21 21c4.8 0 8 3.1 8 8h-6.4c0-3-1.1-5.5-3.2-7.1.5-.5 1-.9 1.6-.9Z" fill={color} opacity={0.82} />
+      </Svg>
+    );
+  }
+
+  if (name === 'category') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 32 32">
+        <Rect x={3} y={3} width={11} height={11} rx={3} fill={color} />
+        <Rect x={18} y={3} width={11} height={11} rx={3} fill={color} opacity={0.78} />
+        <Rect x={3} y={18} width={11} height={11} rx={3} fill={color} opacity={0.78} />
+        <Rect x={18} y={18} width={11} height={11} rx={3} fill={color} />
       </Svg>
     );
   }

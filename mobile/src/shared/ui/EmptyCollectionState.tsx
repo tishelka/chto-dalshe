@@ -8,9 +8,10 @@ type Props = {
   title: string;
   description: string;
   actionTitle: string;
+  onAction?: () => void;
 };
 
-export function EmptyCollectionState({ icon, title, description, actionTitle }: Props) {
+export function EmptyCollectionState({ icon, title, description, actionTitle, onAction }: Props) {
   return (
     <View style={styles.emptyState}>
       <View style={styles.icon}>{icon}</View>
@@ -19,6 +20,7 @@ export function EmptyCollectionState({ icon, title, description, actionTitle }: 
       <ActionButton
         title={actionTitle}
         variant="indigo"
+        onPress={onAction}
         style={styles.button}
         labelStyle={styles.buttonLabel}
       />

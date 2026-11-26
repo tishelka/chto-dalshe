@@ -1,10 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   Image,
   PanResponder,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,69 +19,45 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ActionButton } from '../../../shared/ui/ActionButton';
 import { RecommendationIcon, type RecommendationIconName } from './RecommendationIcon';
-
-type Activity = {
-  id: string;
-  title: string;
-  duration: string;
-  participants: string;
-  budget: string;
-  place: string;
-};
+import { api, getErrorMessage } from '../../../shared/api/client';
+import type { Activity, SearchParams } from '../../../shared/api/types';
 
 type SwipeDirection = 'left' | 'right';
 
-const activities: Activity[] = [
-  {
-    id: 'conversation-without-phones',
-    title: 'Разговор без телефонов',
-    duration: 'от 25 минут',
-    participants: '2–10 человек',
-    budget: 'бесплатно',
-    place: 'дома / на улице /\nкуда-нибудь сходить',
-  },
-  {
-    id: 'board-game-tournament',
-    title: 'Домашний турнир в настольные игры',
-    duration: 'от 40 минут',
-    participants: '2–6 человек',
-    budget: 'бесплатно',
-    place: 'дома',
-  },
-  {
-    id: 'walk-without-route',
-    title: 'Прогулка без маршрута',
-    duration: 'от 30 минут',
-    participants: '1–10 человек',
-    budget: 'бесплатно',
-    place: 'на улице',
-  },
-  {
-    id: 'cook-together',
-    title: 'Приготовить ужин вместе',
-    duration: 'около часа',
-    participants: '2–8 человек',
-    budget: 'до 1500 ₽',
-    place: 'дома',
-  },
-  {
-    id: 'photo-hunt',
-    title: 'Фотоохота в своём городе',
-    duration: 'от 45 минут',
-    participants: '2–10 человек',
-    budget: 'бесплатно',
-    place: 'на улице / куда-нибудь сходить',
-  },
-];
-
-const iconFacts: { icon: RecommendationIconName; key: keyof Pick<Activity, 'duration' | 'participants' | 'budget' | 'place'> }[] = [
+const iconFacts: { icon: RecommendationIconName; key: 'duration' | 'category' | 'budget' | 'place' }[] = [
   { icon: 'clock', key: 'duration' },
-  { icon: 'participants', key: 'participants' },
+  { icon: 'category', key: 'category' },
   { icon: 'budget', key: 'budget' },
   { icon: 'place', key: 'place' },
 ];
 
+function formatActivity(activity: Activity) {
+  const duration = activity.duration_min == null
+    ? 'не указано'
+    : activity.duration_min < 60
+      ? `от ${activity.duration_min} минут`
+      : `${Math.floor(activity.duration_min / 60)} ч${activity.duration_min % 60 ? ` ${activity.duration_min % 60} мин` : ''}`;
+  const budget = ['бесплатно', 'до 500 ₽', 'до 1500 ₽', 'до 3000 ₽'][activity.budget_level] ?? 'платно';
+  return {
+    duration,
+    category: activity.category?.name ?? 'Активность',
+    budget,
+    place: activity.is_outdoor ? 'на улице' : 'в помещении',
+  };
+}
+
+function filterActivities(activities: Activity[], params: SearchParams | null) {
+  if (!params) return activities;
+  return activities.filter(activity =>
+    (!params.category_ids?.length || params.category_ids.includes(activity.category_id)) &&
+    (params.duration_min == null || activity.duration_min == null || activity.duration_min <= params.duration_min) &&
+    (params.budget_level == null || activity.budget_level <= params.budget_level) &&
+    (params.is_outdoor == null || activity.is_outdoor === params.is_outdoor)
+  );
+}
+
 export default function RecommendationScreen() {
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const contentWidth = Math.min(width - 28, 420);
@@ -87,9 +67,68 @@ export default function RecommendationScreen() {
   const imageHeight = contentWidth * 0.46;
   const footerButtonWidth = (contentWidth * 0.8 - 12) / 2;
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const currentIndexRef = useRef(0);
   const isAnimating = useRef(false);
+  const shownIds = useRef(new Set<number>());
   const position = useRef(new Animated.ValueXY()).current;
+
+  function trackHistory(activityId: number, action: 'shown' | 'accepted' | 'skipped') {
+    if (action === 'shown') {
+      if (shownIds.current.has(activityId)) return;
+      shownIds.current.add(activityId);
+    }
+    void api.addHistory(activityId, action).catch(requestError => setError(getErrorMessage(requestError)));
+  }
+
+  const loadActivities = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    setCurrentIndex(0);
+    currentIndexRef.current = 0;
+    try {
+      const [allActivities, favorites, savedParams] = await Promise.all([
+        api.getActivities(),
+        api.getFavorites(),
+        mode === 'search' ? api.getSearchParams() : Promise.resolve(null),
+      ]);
+      const matches = mode === 'search' ? filterActivities(allActivities, savedParams) : allActivities;
+      shownIds.current.clear();
+      setActivities(matches);
+      setFavoriteIds(favorites.map(favorite => favorite.activity_id));
+      if (matches[0]) trackHistory(matches[0].id, 'shown');
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [mode]);
+
+  useEffect(() => { void loadActivities(); }, [loadActivities]);
+
+  async function toggleFavorite(activity: Activity) {
+    const isFavorite = favoriteIds.includes(activity.id);
+    setError('');
+    try {
+      if (isFavorite) await api.removeFavorite(activity.id);
+      else await api.addFavorite(activity.id);
+      setFavoriteIds(current => isFavorite ? current.filter(id => id !== activity.id) : [...current, activity.id]);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    }
+  }
+
+  async function showDetails(activity: Activity) {
+    try {
+      const fullActivity = await api.getActivity(activity.id);
+      Alert.alert(fullActivity.title, fullActivity.description);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    }
+  }
 
   const advanceCard = useCallback((direction: SwipeDirection) => {
     if (isAnimating.current || currentIndexRef.current >= activities.length) {
@@ -111,12 +150,15 @@ export default function RecommendationScreen() {
       }
 
       const nextIndex = currentIndexRef.current + 1;
+      const currentActivity = activities[currentIndexRef.current];
+      if (currentActivity) trackHistory(currentActivity.id, direction === 'right' ? 'accepted' : 'skipped');
       currentIndexRef.current = nextIndex;
       setCurrentIndex(nextIndex);
+      if (activities[nextIndex]) trackHistory(activities[nextIndex].id, 'shown');
       position.setValue({ x: 0, y: 0 });
       isAnimating.current = false;
     });
-  }, [position, width]);
+  }, [position, width, activities]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, gesture) =>
@@ -180,11 +222,20 @@ export default function RecommendationScreen() {
         <Text accessibilityRole="header" style={[styles.pageTitle, { fontSize: titleSize, lineHeight: titleSize * 1.2 }]}>
           Вот твоя идея!
         </Text>
+        {!!error && activities.length > 0 && <Text accessibilityRole="alert" style={styles.requestError}>{error}</Text>}
 
-        {finished ? (
+        {loading ? (
+          <ActivityIndicator style={{ marginTop: 40 }} color="#48075B" />
+        ) : error && activities.length === 0 ? (
           <View style={[styles.finishedState, { minHeight: cardHeight }]}>
-            <Text style={styles.finishedTitle}>Идеи закончились</Text>
-            <Text style={styles.finishedText}>В этой серии больше нет вариантов.</Text>
+            <Text style={styles.finishedTitle}>Не удалось загрузить занятия</Text>
+            <Text style={styles.finishedText}>{error}</Text>
+            <ActionButton title="Повторить" variant="indigo" onPress={() => void loadActivities()} style={styles.restartButton} labelStyle={styles.acceptLabel} />
+          </View>
+        ) : finished ? (
+          <View style={[styles.finishedState, { minHeight: cardHeight }]}>
+            <Text style={styles.finishedTitle}>{activities.length ? 'Идеи закончились' : 'Подходящих идей пока нет'}</Text>
+            <Text style={styles.finishedText}>{activities.length ? 'В этой серии больше нет вариантов.' : 'Измени параметры или попробуй удивить себя.'}</Text>
             <ActionButton
               title="Назад к параметрам"
               variant="indigo"
@@ -215,7 +266,7 @@ export default function RecommendationScreen() {
                       isFront ? activeCardStyle : undefined,
                     ]}
                   >
-                    <ActivityCard activity={activity} cardHeight={cardHeight} imageHeight={imageHeight} scale={cardScale} />
+                    <ActivityCard activity={activity} cardHeight={cardHeight} imageHeight={imageHeight} scale={cardScale} isFavorite={favoriteIds.includes(activity.id)} onToggleFavorite={() => void toggleFavorite(activity)} onDetails={() => void showDetails(activity)} />
                   </Animated.View>
                 );
               })}
@@ -261,9 +312,13 @@ type ActivityCardProps = {
   cardHeight: number;
   imageHeight: number;
   scale: number;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+  onDetails: () => void;
 };
 
-function ActivityCard({ activity, cardHeight, imageHeight, scale }: ActivityCardProps) {
+function ActivityCard({ activity, cardHeight, imageHeight, scale, isFavorite, onToggleFavorite, onDetails }: ActivityCardProps) {
+  const facts = formatActivity(activity);
   return (
     <View style={[styles.card, { height: cardHeight }]}>
       <View style={[styles.imageFrame, { height: imageHeight }]}>
@@ -272,9 +327,9 @@ function ActivityCard({ activity, cardHeight, imageHeight, scale }: ActivityCard
           resizeMode="cover"
           style={styles.image}
         />
-        <View style={styles.favorite}>
-          <RecommendationIcon name="heart" size={38} />
-        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'} onPress={onToggleFavorite} style={styles.favorite}>
+          <Text style={styles.favoriteIcon}>{isFavorite ? '♥' : '♡'}</Text>
+        </Pressable>
       </View>
 
       <View style={[styles.cardBody, { paddingHorizontal: 17 * scale, paddingTop: 20 * scale, paddingBottom: 20 * scale }]}>
@@ -292,17 +347,18 @@ function ActivityCard({ activity, cardHeight, imageHeight, scale }: ActivityCard
               <View style={[styles.factIcon, { width: 34 * scale }]}>
                 <RecommendationIcon name={icon} size={24 * scale} color="#A063B1" />
               </View>
-              <Text style={[styles.factLabel, { fontSize: 16 * scale, lineHeight: 19 * scale }]}>{activity[key]}</Text>
+              <Text style={[styles.factLabel, { fontSize: 16 * scale, lineHeight: 19 * scale }]}>{facts[key]}</Text>
             </View>
           ))}
         </View>
 
         <View style={[styles.detailsRow, { minHeight: 50 * scale, gap: 8 * scale, marginTop: 22 * scale }]}>
-          <Text style={[styles.detailsText, { fontSize: 11 * scale, lineHeight: 13 * scale }]}>подробнее расскажем о правилах и подготовке</Text>
+          <Text style={[styles.detailsText, { fontSize: 11 * scale, lineHeight: 13 * scale }]} numberOfLines={3}>{activity.description}</Text>
           <ActionButton
             title="Хочу узнать подробнее"
             variant="plum"
             icon={<RecommendationIcon name="arrow-right" size={28} />}
+            onPress={onDetails}
             style={[styles.moreButton, { minHeight: 52 * scale, paddingHorizontal: 9 * scale }]}
             labelStyle={[styles.moreLabel, { fontSize: 14 * scale, lineHeight: 15 * scale }]}
           />
@@ -332,6 +388,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 42,
   },
+  requestError: { color: '#A1284A', fontFamily: 'EtudeNoireBold', textAlign: 'center', marginTop: -28, marginBottom: 14 },
   cardStack: {
     alignSelf: 'center',
     position: 'relative',
@@ -363,6 +420,7 @@ const styles = StyleSheet.create({
     top: 15,
     left: 15,
   },
+  favoriteIcon: { color: '#A063B1', fontSize: 40, lineHeight: 46, fontWeight: '700' },
   cardBody: {
     flex: 1,
   },
