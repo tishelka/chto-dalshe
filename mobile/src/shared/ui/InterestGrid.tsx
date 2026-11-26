@@ -1,10 +1,20 @@
-import { useState, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { interests, type Interest } from '../data/interests';
+import { useState } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { onboarding as palette } from '../theme/onboarding';
+
+export type InterestOption = { id: string; label: string };
 
 type Props = {
   selectedIds?: readonly string[];
+  options: InterestOption[];
   onToggle?: (id: string) => void;
   gap?: number;
   style?: StyleProp<ViewStyle>;
@@ -12,7 +22,7 @@ type Props = {
 
 const emptySelection: readonly string[] = [];
 
-export function InterestGrid({ selectedIds = emptySelection, onToggle, gap = 12, style }: Props) {
+export function InterestGrid({ selectedIds = emptySelection, options, onToggle, gap = 12, style }: Props) {
   const [gridWidth, setGridWidth] = useState(0);
   const cardSize = Math.max(0, (gridWidth - gap * 2) / 3);
 
@@ -23,7 +33,7 @@ export function InterestGrid({ selectedIds = emptySelection, onToggle, gap = 12,
 
   return (
     <View onLayout={measureGrid} style={[styles.grid, { gap }, style]}>
-      {interests.map((interest, index) => (
+      {options.map((interest, index) => (
         <InterestTile
           key={interest.id}
           interest={interest}
@@ -38,7 +48,7 @@ export function InterestGrid({ selectedIds = emptySelection, onToggle, gap = 12,
 }
 
 type TileProps = {
-  interest: Interest;
+  interest: InterestOption;
   index: number;
   size: number;
   selected: boolean;
@@ -55,7 +65,7 @@ function InterestTile({ interest, index, size, selected, onPress }: TileProps) {
   const content = (
     <>
       {selected && <Text style={styles.check} accessible={false}>✓</Text>}
-      <Text style={[styles.cardText, { fontSize: Math.min(12, size / 8.5) }]}>{interest.label}</Text>
+      <Text style={[styles.cardText, { fontSize: Math.max(8, Math.min(12, size / 8.5)) }]}>{interest.label}</Text>
     </>
   );
 

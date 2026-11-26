@@ -3,10 +3,12 @@ from fastapi import APIRouter,Depends,Header,HTTPException,status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session,joinedload
 from app.core.database import get_db
-from app.models.models import Activity,Category,Favorite,User
+from app.models.models import Activity,Category,Favorite,RecommendationHistory,User
 from app.schemas.user import (
     FavoriteCreate,
     FavoriteResponse,
+    HistoryCreate,
+    HistoryResponse,
     SearchParamsSchema,
     UserInterestsResponse,
     UserInterestsUpdate,
@@ -167,3 +169,50 @@ def remove_favorite(
     db.delete(favorite)
     db.commit()
     return None
+
+@router.get("/history",response_model=List[HistoryResponse])
+def get_recommendation_history(
+    current_user:User=Depends(get_current_user),
+    db:Session=Depends(get_db),
+):
+    return (
+        db.query(RecommendationHistory)
+        .options(joinedload(RecommendationHistory.activity).joinedload(Activity.category))
+        .filter(RecommendationHistory.user_id==current_user.id)
+        .order_by(RecommendationHistory.created_at.desc())
+        .limit(100)
+        .all()
+    )
+
+@router.post("/history",response_model=HistoryResponse,status_code=status.HTTP_201_CREATED)
+def add_recommendation_history(
+    payload:HistoryCreate,
+    current_user:User=Depends(get_current_user),
+    db:Session=Depends(get_db),
+):
+    activity=(
+        db.query(Activity)
+        .options(joinedload(Activity.category))
+        .filter(Activity.id==payload.activity_id)
+        .first()
+    )
+    if not activity:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Activity with id {payload.activity_id} not found",
+        )
+
+    history=RecommendationHistory(
+        user_id=current_user.id,
+        activity_id=payload.activity_id,
+        action=payload.action,
+    )
+    db.add(history)
+    db.commit()
+    db.refresh(history)
+    return (
+        db.query(RecommendationHistory)
+        .options(joinedload(RecommendationHistory.activity).joinedload(Activity.category))
+        .filter(RecommendationHistory.id==history.id)
+        .first()
+    )

@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 
 type Props = {
   title: string;
@@ -6,9 +6,10 @@ type Props = {
   duration: string;
   price: string;
   image: ImageSourcePropType;
+  onRemove?: () => void;
 };
 
-export function SavedActivityCard({ title, note, duration, price, image }: Props) {
+export function SavedActivityCard({ title, note, duration, price, image, onRemove }: Props) {
   return (
     <View style={styles.card}>
       <Image source={image} resizeMode="cover" style={styles.image} />
@@ -20,6 +21,7 @@ export function SavedActivityCard({ title, note, duration, price, image }: Props
           <Text style={styles.detail}>{price}</Text>
         </View>
       </View>
+      {onRemove && <Pressable accessibilityRole="button" accessibilityLabel="Убрать из избранного" onPress={onRemove} hitSlop={10} style={styles.remove}><Text style={styles.removeText}>×</Text></Pressable>}
     </View>
   );
 }
@@ -64,4 +66,6 @@ const styles = StyleSheet.create({
     fontFamily: 'EtudeNoireBold',
     fontSize: 10,
   },
+  remove: { alignSelf: 'flex-start', paddingHorizontal: 4, paddingTop: 1 },
+  removeText: { color: '#48075B', fontSize: 24, lineHeight: 24 },
 });

@@ -83,7 +83,7 @@ export default function HomeScreen() {
           <ActionButton
             title="УДИВИ МЕНЯ"
             variant="white"
-            onPress={() => router.push('/(tabs)/home/recommendation')}
+            onPress={() => router.push({ pathname: '/(tabs)/home/recommendation', params: { mode: 'surprise' } })}
             style={[styles.secondaryButton, { height: buttonHeight }]}
             labelStyle={{ fontSize: Math.min(22, contentWidth * 0.05) }}
           />
